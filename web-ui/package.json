@@ -43,7 +43,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
     "prettier": "^3.6.2",
-    "puppeteer": "^24.22.3",
+    "puppeteer": "^24.23.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
