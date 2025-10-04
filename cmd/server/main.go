@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"innominatus/internal/admin"
 	"innominatus/internal/database"
+	"innominatus/internal/metrics"
 	"innominatus/internal/server"
 	"innominatus/internal/validation"
 	"log"
@@ -103,6 +104,26 @@ func main() {
 	http.HandleFunc("/api/impersonate", srv.LoggingMiddleware(srv.CorsMiddleware(srv.AdminOnlyMiddleware(srv.HandleImpersonate))))
 	http.HandleFunc("/api/users", srv.LoggingMiddleware(srv.CorsMiddleware(srv.AdminOnlyMiddleware(srv.HandleListUsers))))
 
+	// Profile management routes (authenticated users only)
+	http.HandleFunc("/api/profile", srv.LoggingMiddleware(srv.CorsMiddleware(srv.AuthMiddleware(srv.HandleGetProfile))))
+	http.HandleFunc("/api/profile/api-keys", srv.LoggingMiddleware(srv.CorsMiddleware(srv.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			srv.HandleGetAPIKeys(w, r)
+		case http.MethodPost:
+			srv.HandleGenerateAPIKey(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))))
+	http.HandleFunc("/api/profile/api-keys/", srv.LoggingMiddleware(srv.CorsMiddleware(srv.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			srv.HandleRevokeAPIKey(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))))
+
 	// Demo Environment API routes (with logging, CORS, and authentication)
 	http.HandleFunc("/api/demo/status", srv.LoggingMiddleware(srv.CorsMiddleware(srv.AuthMiddleware(srv.HandleDemoStatus))))
 	http.HandleFunc("/api/demo/time", srv.LoggingMiddleware(srv.CorsMiddleware(srv.AuthMiddleware(srv.HandleDemoTime))))
@@ -144,6 +165,20 @@ func main() {
 		}
 		fs.ServeHTTP(w, r)
 	}))
+
+	// Initialize metrics pusher if PUSHGATEWAY_URL is set
+	pushgatewayURL := os.Getenv("PUSHGATEWAY_URL")
+	if pushgatewayURL == "" {
+		pushgatewayURL = "http://pushgateway.localtest.me"
+	}
+
+	var metricsPusher *metrics.MetricsPusher
+	if pushgatewayURL != "" && pushgatewayURL != "disabled" {
+		pushInterval := 15 * time.Second
+		metricsPusher = metrics.NewMetricsPusher(pushgatewayURL, pushInterval)
+		metricsPusher.StartPushing()
+		defer metricsPusher.Stop()
+	}
 
 	addr := ":" + *port
 	fmt.Printf("Starting Score Orchestrator server on http://localhost%s\n", addr)

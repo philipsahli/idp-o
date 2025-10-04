@@ -97,6 +97,8 @@ func (h *HealthChecker) CheckComponent(component DemoComponent) HealthStatus {
 		status = h.checkGrafana(resp, status)
 	case "prometheus":
 		status = h.checkPrometheus(resp, status)
+	case "pushgateway":
+		status = h.checkPushgateway(resp, status)
 	case "demo-app":
 		status = h.checkDemoApp(resp, status)
 	case "kubernetes-dashboard":
@@ -105,6 +107,10 @@ func (h *HealthChecker) CheckComponent(component DemoComponent) HealthStatus {
 		status = h.checkVaultSecretsOperator(component, status)
 	case "minio":
 		status = h.checkMinio(resp, status)
+	case "backstage":
+		status = h.checkBackstage(resp, status)
+	case "keycloak":
+		status = h.checkKeycloak(resp, status)
 	default:
 		status = h.checkGeneric(resp, status)
 	}
@@ -198,6 +204,17 @@ func (h *HealthChecker) checkGrafana(resp *http.Response, status HealthStatus) H
 
 // checkPrometheus performs Prometheus-specific health check
 func (h *HealthChecker) checkPrometheus(resp *http.Response, status HealthStatus) HealthStatus {
+	if resp.StatusCode == 200 {
+		status.Healthy = true
+		status.Status = "Ready"
+	} else {
+		status.Status = fmt.Sprintf("HTTP %d", resp.StatusCode)
+	}
+	return status
+}
+
+// checkPushgateway performs Pushgateway health check
+func (h *HealthChecker) checkPushgateway(resp *http.Response, status HealthStatus) HealthStatus {
 	if resp.StatusCode == 200 {
 		status.Healthy = true
 		status.Status = "Ready"
@@ -313,6 +330,32 @@ func (h *HealthChecker) checkMinio(resp *http.Response, status HealthStatus) Hea
 		status.Healthy = true
 		status.Status = "Live"
 	} else {
+		status.Status = fmt.Sprintf("HTTP %d", resp.StatusCode)
+	}
+	return status
+}
+
+// checkBackstage performs Backstage-specific health check
+func (h *HealthChecker) checkBackstage(resp *http.Response, status HealthStatus) HealthStatus {
+	if resp.StatusCode == 200 {
+		status.Healthy = true
+		status.Status = "Available"
+	} else {
+		status.Status = fmt.Sprintf("HTTP %d", resp.StatusCode)
+	}
+	return status
+}
+
+// checkKeycloak performs Keycloak-specific health check
+func (h *HealthChecker) checkKeycloak(resp *http.Response, status HealthStatus) HealthStatus {
+	// CloudPirates Keycloak chart returns HTTP 302 (redirect to /admin/) when healthy
+	switch resp.StatusCode {
+	case 302, 200:
+		status.Healthy = true
+		status.Status = "Running"
+	case 503:
+		status.Status = "Starting"
+	default:
 		status.Status = fmt.Sprintf("HTTP %d", resp.StatusCode)
 	}
 	return status

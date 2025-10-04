@@ -136,26 +136,41 @@ func (c *CheatSheet) PrintQuickStart() {
 	fmt.Println()
 	fmt.Println("2. Access ArgoCD (GitOps):")
 	fmt.Println("   • URL: http://argocd.localtest.me")
-	fmt.Println("   • Login: admin / admin123")
+	fmt.Println("   • Login Methods:")
+	fmt.Println("     - Admin: admin / admin123")
+	fmt.Println("     - OIDC: Click 'LOG IN VIA KEYCLOAK' (demo-user / password123)")
 	fmt.Println("   • View deployed applications")
 	fmt.Println()
-	fmt.Println("3. Access Grafana (Monitoring):")
+	fmt.Println("3. Access Keycloak (Identity Provider):")
+	fmt.Println("   • URL: http://keycloak.localtest.me")
+	fmt.Println("   • Admin: admin / adminpassword")
+	fmt.Println("   • Realm: demo-realm")
+	fmt.Println("   • Demo Users:")
+	fmt.Println("     - demo-user / password123")
+	fmt.Println("     - test-user / test123")
+	fmt.Println()
+	fmt.Println("4. Access Grafana (Monitoring):")
 	fmt.Println("   • URL: http://grafana.localtest.me")
 	fmt.Println("   • Login: admin / admin")
 	fmt.Println("   • Explore pre-configured dashboards")
 	fmt.Println()
-	fmt.Println("4. Access Minio (Object Storage):")
+	fmt.Println("5. Access Minio (Object Storage):")
 	fmt.Println("   • API: http://minio.localtest.me")
 	fmt.Println("   • Console: http://minio-console.localtest.me")
 	fmt.Println("   • Login: minioadmin / minioadmin")
 	fmt.Println("   • S3-compatible object storage for applications")
 	fmt.Println()
-	fmt.Println("5. Access Kubernetes Dashboard:")
+	fmt.Println("6. Access Backstage (Developer Portal):")
+	fmt.Println("   • URL: http://backstage.localtest.me")
+	fmt.Println("   • Demo mode - no authentication required")
+	fmt.Println("   • Software catalog and developer portal")
+	fmt.Println()
+	fmt.Println("7. Access Kubernetes Dashboard:")
 	fmt.Println("   • URL: http://k8s.localtest.me")
 	fmt.Println("   • Login token: kubectl -n kubernetes-dashboard create token admin-user")
 	fmt.Println("   • View cluster resources and workloads")
 	fmt.Println()
-	fmt.Println("6. Access Demo Application:")
+	fmt.Println("8. Access Demo Application:")
 	fmt.Println("   • URL: http://demo.localtest.me")
 	fmt.Println("   • Sample app deployed via Score spec")
 	fmt.Println()
@@ -288,12 +303,18 @@ func (c *CheatSheet) formatServiceName(name string) string {
 		return "Grafana"
 	case "prometheus":
 		return "Prometheus"
+	case "pushgateway":
+		return "Pushgateway"
 	case "demo-app":
 		return "Demo App"
 	case "nginx-ingress":
 		return "Ingress"
 	case "kubernetes-dashboard":
 		return "K8s Dashboard"
+	case "backstage":
+		return "Backstage"
+	case "minio":
+		return "Minio"
 	default:
 		return toTitle(name)
 	}

@@ -116,6 +116,63 @@ func NewDemoEnvironment() *DemoEnvironment {
 				Port:       3000,
 			},
 			{
+				Name:        "keycloak",
+				Namespace:   "keycloak",
+				Chart:       "oci://registry-1.docker.io/cloudpirates/keycloak",
+				Repo:        "",
+				Version:     "0.1.10",
+				IngressHost: "keycloak.localtest.me",
+				Credentials: map[string]string{
+					"username": "admin",
+					"password": "adminpassword",
+					"realm":    "demo-realm",
+					"users":    "demo-user/password123, test-user/test123",
+				},
+				Values: map[string]interface{}{
+					"keycloak": map[string]interface{}{
+						"adminUser":     "admin",
+						"adminPassword": "adminpassword",
+						"httpEnabled":   true,
+						"hostname":      "keycloak.localtest.me",
+					},
+					"database": map[string]interface{}{
+						"type":     "postgres",
+						"host":     "keycloak-postgresql",
+						"port":     "5432",
+						"name":     "keycloak",
+						"username": "keycloak",
+						"password": "keycloak123",
+					},
+					"ingress": map[string]interface{}{
+						"enabled":   true,
+						"className": "nginx",
+						"hosts": []map[string]interface{}{
+							{
+								"host": "keycloak.localtest.me",
+								"paths": []map[string]interface{}{
+									{
+										"path":     "/",
+										"pathType": "Prefix",
+									},
+								},
+							},
+						},
+					},
+					"resources": map[string]interface{}{
+						"requests": map[string]interface{}{
+							"memory": "512Mi",
+							"cpu":    "500m",
+						},
+						"limits": map[string]interface{}{
+							"memory": "1Gi",
+							"cpu":    "1000m",
+						},
+					},
+				},
+				HealthPath: "/",
+				Port:       8080,
+			},
+			{
 				Name:        "argocd",
 				Namespace:   "argocd",
 				Chart:       "argo-cd",
@@ -230,9 +287,52 @@ func NewDemoEnvironment() *DemoEnvironment {
 					"alertmanager": map[string]interface{}{
 						"enabled": false,
 					},
+					"serverFiles": map[string]interface{}{
+						"prometheus.yml": map[string]interface{}{
+							"scrape_configs": []map[string]interface{}{
+								{
+									"job_name": "prometheus",
+									"static_configs": []map[string]interface{}{
+										{
+											"targets": []string{"localhost:9090"},
+										},
+									},
+								},
+								{
+									"job_name":     "pushgateway",
+									"honor_labels": true,
+									"static_configs": []map[string]interface{}{
+										{
+											"targets": []string{"pushgateway-prometheus-pushgateway.monitoring.svc.cluster.local:9091"},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 				HealthPath: "/-/healthy",
 				Port:       9090,
+			},
+			{
+				Name:        "pushgateway",
+				Namespace:   "monitoring",
+				Chart:       "prometheus-pushgateway",
+				Repo:        "https://prometheus-community.github.io/helm-charts",
+				Version:     "2.4.2",
+				IngressHost: "pushgateway.localtest.me",
+				Credentials: map[string]string{},
+				Values: map[string]interface{}{
+					"ingress": map[string]interface{}{
+						"enabled":   true,
+						"className": "nginx",
+						"hosts": []string{
+							"pushgateway.localtest.me",
+						},
+					},
+				},
+				HealthPath: "/-/healthy",
+				Port:       9091,
 			},
 			{
 				Name:        "grafana",
@@ -312,6 +412,114 @@ func NewDemoEnvironment() *DemoEnvironment {
 				},
 				HealthPath: "/minio/health/live",
 				Port:       9000,
+			},
+			{
+				Name:        "backstage",
+				Namespace:   "backstage",
+				Chart:       "backstage",
+				Repo:        "https://backstage.github.io/charts",
+				Version:     "2.6.1",
+				IngressHost: "backstage.localtest.me",
+				Credentials: map[string]string{
+					"info": "Demo mode - no authentication required",
+				},
+				Values: map[string]interface{}{
+					"backstage": map[string]interface{}{
+						"image": map[string]interface{}{
+							"pullPolicy": "IfNotPresent",
+						},
+						"appConfig": map[string]interface{}{
+							"app": map[string]interface{}{
+								"baseUrl": "http://backstage.localtest.me",
+								"title":   "OpenAlps Developer Portal",
+							},
+							"backend": map[string]interface{}{
+								"baseUrl": "http://backstage.localtest.me",
+								"listen": map[string]interface{}{
+									"port": 7007,
+								},
+								"cors": map[string]interface{}{
+									"origin":      "http://backstage.localtest.me",
+									"methods":     []string{"GET", "HEAD", "PATCH", "POST", "PUT", "DELETE"},
+									"credentials": true,
+								},
+								"database": map[string]interface{}{
+									"client": "better-sqlite3",
+									"connection": map[string]interface{}{
+										"filename": ":memory:",
+									},
+								},
+								"reading": map[string]interface{}{
+									"allow": []map[string]string{
+										{"host": "gitea-http.gitea.svc.cluster.local:3000"},
+										{"host": "gitea-http.gitea.svc.cluster.local"},
+										{"host": "gitea.localtest.me"},
+									},
+								},
+							},
+							"organization": map[string]interface{}{
+								"name": "OpenAlps Demo",
+							},
+							"catalog": map[string]interface{}{
+								"import": map[string]interface{}{
+									"entityFilename":        "catalog-info.yaml",
+									"pullRequestBranchName": "backstage-integration",
+								},
+								"rules": []map[string]interface{}{
+									{"allow": []string{"Component", "System", "API", "Resource", "Location", "Template"}},
+								},
+							},
+							"techdocs": map[string]interface{}{
+								"builder": "local",
+								"generator": map[string]interface{}{
+									"runIn": "local",
+								},
+								"publisher": map[string]interface{}{
+									"type": "local",
+								},
+							},
+							"auth": map[string]interface{}{
+								"environment": "development",
+								"providers": map[string]interface{}{
+									"guest": map[string]interface{}{
+										"dangerouslyAllowOutsideDevelopment": true,
+									},
+								},
+							},
+							"permission": map[string]interface{}{
+								"enabled": false,
+							},
+							"integrations": map[string]interface{}{
+								"gitea": []map[string]interface{}{
+									{
+										"host":     "gitea-http.gitea.svc.cluster.local:3000",
+										"username": "giteaadmin",
+										"password": "admin",
+									},
+								},
+							},
+						},
+					},
+					"ingress": map[string]interface{}{
+						"enabled":   true,
+						"className": "nginx",
+						"host":      "backstage.localtest.me",
+						"annotations": map[string]string{
+							"nginx.ingress.kubernetes.io/ssl-redirect": "false",
+						},
+					},
+					"postgresql": map[string]interface{}{
+						"enabled": false,
+					},
+					"service": map[string]interface{}{
+						"type": "ClusterIP",
+						"ports": map[string]interface{}{
+							"backend": 7007,
+						},
+					},
+				},
+				HealthPath: "/healthcheck",
+				Port:       7007,
 			},
 			{
 				Name:        "demo-app",

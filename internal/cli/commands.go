@@ -559,6 +559,24 @@ func (c *Client) RunGoldenPathCommand(pathName string, scoreFile string, params 
 
 	// Validate required parameters
 	if err := config.ValidateParameters(pathName, params); err != nil {
+		// Check if it's a parameter validation error for better messaging
+		if paramErr, ok := err.(*goldenpaths.ParameterValidationError); ok {
+			formatter.PrintError(fmt.Sprintf("Parameter validation failed for '%s'", pathName))
+			formatter.PrintKeyValue(1, "Parameter", paramErr.ParameterName)
+			if paramErr.ProvidedValue != "" {
+				formatter.PrintKeyValue(1, "Provided Value", paramErr.ProvidedValue)
+			}
+			if paramErr.ExpectedType != "" {
+				formatter.PrintKeyValue(1, "Expected Type", paramErr.ExpectedType)
+			}
+			if paramErr.Constraint != "" {
+				formatter.PrintKeyValue(1, "Constraint", paramErr.Constraint)
+			}
+			if paramErr.Suggestion != "" {
+				formatter.PrintKeyValue(1, "Suggestion", paramErr.Suggestion)
+			}
+			return fmt.Errorf("parameter validation failed")
+		}
 		return fmt.Errorf("parameter validation failed: %w", err)
 	}
 
@@ -785,6 +803,20 @@ func (c *Client) DemoTimeCommand() error {
 		return err
 	}
 
+	// Configure Keycloak realm and ArgoCD OIDC
+	cheatSheet.PrintProgress("Configuring Keycloak realm and ArgoCD OIDC...")
+	if err := installer.ApplyKeycloakConfig(); err != nil {
+		cheatSheet.PrintError("Keycloak Configuration", err)
+		return err
+	}
+
+	// Restart ArgoCD server to apply OIDC configuration
+	cheatSheet.PrintProgress("Restarting ArgoCD server...")
+	if err := installer.RestartArgoCDServer(); err != nil {
+		cheatSheet.PrintError("ArgoCD Restart", err)
+		return err
+	}
+
 	// Seed Git repository
 	cheatSheet.PrintProgress("Seeding Git repository...")
 	if err := gitManager.SeedRepository(); err != nil {
@@ -796,6 +828,12 @@ func (c *Client) DemoTimeCommand() error {
 	cheatSheet.PrintProgress("Installing Grafana dashboards...")
 	if err := grafanaManager.InstallClusterHealthDashboard(); err != nil {
 		cheatSheet.PrintError("Grafana Dashboard Installation", err)
+		return err
+	}
+
+	// Install Innominatus Platform Metrics Dashboard
+	if err := grafanaManager.InstallInnominatusDashboard(); err != nil {
+		cheatSheet.PrintError("Innominatus Dashboard Installation", err)
 		return err
 	}
 
@@ -836,8 +874,27 @@ func (c *Client) DemoNukeCommand() error {
 		}
 	}
 
+	// Remove ArgoCD OIDC configuration before deleting namespaces
+	cheatSheet.PrintProgress("Removing ArgoCD OIDC configuration...")
+	// #nosec G204 - kubectl context from controlled demo environment
+	removeOIDCCmd := exec.Command("kubectl", "--context", env.KubeContext, "patch", "configmap", "argocd-cm",
+		"-n", "argocd",
+		"--type", "json",
+		"-p", `[{"op": "remove", "path": "/data/oidc.config"}]`)
+	if err := removeOIDCCmd.Run(); err != nil {
+		fmt.Printf("Warning: Failed to remove OIDC config: %v\n", err)
+	}
+
+	// #nosec G204 - kubectl context from controlled demo environment
+	removeSecretCmd := exec.Command("kubectl", "--context", env.KubeContext, "delete", "secret", "argocd-oidc-secret",
+		"-n", "argocd",
+		"--ignore-not-found=true")
+	if err := removeSecretCmd.Run(); err != nil {
+		fmt.Printf("Warning: Failed to remove OIDC secret: %v\n", err)
+	}
+
 	// Delete namespaces
-	namespaces := []string{"demo", "monitoring", "vault", "argocd", "gitea", "minio-system", "ingress-nginx", "kubernetes-dashboard"}
+	namespaces := []string{"demo", "monitoring", "vault", "argocd", "gitea", "minio-system", "keycloak", "ingress-nginx", "kubernetes-dashboard"}
 	for _, namespace := range namespaces {
 		cheatSheet.PrintProgress(fmt.Sprintf("Deleting namespace %s...", namespace))
 		if err := installer.DeleteNamespace(namespace); err != nil {
